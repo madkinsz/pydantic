@@ -9,7 +9,7 @@ import sys
 import typing
 from copy import copy
 from dataclasses import Field as DataclassField
-from typing import Any
+from typing import Any, get_type_hints
 from warnings import warn
 
 import annotated_types
@@ -22,7 +22,7 @@ from ._internal._generics import replace_types
 from .errors import PydanticUserError
 
 if typing.TYPE_CHECKING:
-    from pydantic_core import core_schema as _core_schema
+    from pydantic_core import core_schema as _core_schema, core_schema
 
     from ._internal._repr import ReprArgs
 
@@ -746,10 +746,10 @@ class ComputedFieldInfo:
     A container for data from `@computed_field` so that we can access it
     while building the pydantic-core schema.
     """
-
     decorator_repr: typing.ClassVar[str] = '@computed_field'
+
     wrapped_property: property
-    json_return_type: _core_schema.JsonReturnTypes | None
+    return_type: Any
     alias: str | None
     title: str | None
     description: str | None
@@ -785,7 +785,7 @@ def computed_field(
     title: str | None = None,
     description: str | None = None,
     repr: bool = True,
-    json_return_type: _core_schema.JsonReturnTypes | None = None,
+    return_type: Any = None
 ) -> PropertyT | typing.Callable[[PropertyT], PropertyT]:
     """
     Decorate to include `property` and `cached_property` when serialising models.
@@ -808,13 +808,15 @@ def computed_field(
     """
 
     def dec(f: Any) -> Any:
-        nonlocal description
+        nonlocal description, return_type
         if description is None and f.__doc__:
             description = inspect.cleandoc(f.__doc__)
 
         # if the function isn't already decorated with `@property` (or another descriptor), then we wrap it now
         f = _decorators.ensure_property(f)
-        dec_info = ComputedFieldInfo(f, json_return_type, alias, title, description, repr)
+        if return_type is None:
+            return_type = inspect.getfullargspec(f).annotations.get('return', Any)
+        dec_info = ComputedFieldInfo(f, return_type, alias, title, description, repr)
         return _decorators.PydanticDescriptorProxy(f, dec_info)
 
     if __f is None:

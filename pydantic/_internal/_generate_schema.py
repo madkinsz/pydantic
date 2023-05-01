@@ -1101,6 +1101,24 @@ class GenerateSchema:
             self.recursion_cache[obj_ref] = core_schema.definition_reference_schema(obj_ref)
             return obj_ref, None
 
+    def _computed_field_schema(self, d: Decorator[ComputedFieldInfo]) -> core_schema.ComputedField:
+        return_type_schema = self.generate_schema(d.info.return_type)
+        return core_schema.computed_field(
+            d.cls_var_name,
+            return_schema=return_type_schema,
+            alias=d.info.alias
+        )
+        # r = [
+        #     core_schema.computed_field(
+        #         d.cls_var_name,
+        #
+        #         json_return_type=d.info.json_return_type,
+        #         alias=d.info.alias,
+        #     )
+        #     for d in d.values()
+        # ]
+        # return r
+
 
 _VALIDATOR_F_MATCH: Mapping[
     tuple[FieldValidatorModes, Literal['no-info', 'general', 'field']],
@@ -1397,15 +1415,3 @@ def _common_field(
         'frozen': frozen,
         'metadata': metadata,
     }
-
-
-def generate_computed_field(d: dict[str, Decorator[ComputedFieldInfo]]) -> list[core_schema.ComputedField] | None:
-    r = [
-        core_schema.computed_field(
-            d.cls_var_name,
-            json_return_type=d.info.json_return_type,
-            alias=d.info.alias,
-        )
-        for d in d.values()
-    ]
-    return r

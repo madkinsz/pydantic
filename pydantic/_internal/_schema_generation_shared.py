@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 JsonSchemaValue = Dict[str, Any]
-CoreSchemaOrField = Union[core_schema.CoreSchema, core_schema.DataclassField, core_schema.TypedDictField]
+CoreSchemaOrField = Union[core_schema.CoreSchema, core_schema.DataclassField, core_schema.TypedDictField, core_schema.ComputedField]
 
 
 class GetJsonSchemaHandler:

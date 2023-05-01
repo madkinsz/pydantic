@@ -25,6 +25,7 @@ from typing import (
 from weakref import WeakKeyDictionary
 
 import pydantic_core
+from pydantic_core.core_schema import ComputedField
 from typing_extensions import Literal
 
 from pydantic._internal._schema_generation_shared import GenerateJsonSchemaHandler
@@ -115,6 +116,8 @@ class GenerateJsonSchema:
         # of a single instance of a schema generator
         self._used = False
 
+        self._mode: Literal['validation', 'serialization'] = 'validation'
+
     def build_schema_type_to_method(self) -> dict[CoreSchemaType, Callable[[CoreSchema], JsonSchemaValue]]:
         mapping: dict[CoreSchemaType, Callable[[CoreSchema], JsonSchemaValue]] = {}
         for key in _typing_extra.all_literal_values(pydantic_core.CoreSchemaType):  # type: ignore[arg-type]
@@ -146,13 +149,16 @@ class GenerateJsonSchema:
         self._used = True
         return self.definitions
 
-    def generate(self, schema: CoreSchema) -> JsonSchemaValue:
+    def generate(
+        self, schema: CoreSchema, mode: Literal['validation', 'serialization'] = 'serialization'
+    ) -> JsonSchemaValue:
         if self._used:
             raise PydanticUserError(
                 'This JSON schema generator has already been used to generate a JSON schema. '
                 f'You must create a new instance of {type(self).__name__} to generate a new JSON schema.',
                 code='json-schema-already-used',
             )
+        self._mode = mode
 
         json_schema = self.generate_inner(schema)
         json_ref_counts = self.get_json_ref_counts(json_schema)
@@ -538,13 +544,21 @@ class GenerateJsonSchema:
             return self.generate_inner(schema['lax_schema'])
 
     def typed_dict_schema(self, schema: core_schema.TypedDictSchema) -> JsonSchemaValue:
+        fields = schema['fields'].copy()
+
+        if self._mode == 'serialization':
+            computed_fields = schema.get('computed_fields', [])
+        else:
+            computed_fields = []
         named_required_fields = [
-            (k, v['required'], v) for k, v in schema['fields'].items()  # type: ignore  # required is always populated
+            (k, v['required'], v) for k, v in fields.items()  # type: ignore  # required is always populated
         ]
-        return self._named_required_fields_schema(named_required_fields)
+        return self._named_required_fields_schema(named_required_fields, computed_fields)
 
     def _named_required_fields_schema(
-        self, named_required_fields: Sequence[tuple[str, bool, core_schema.TypedDictField | core_schema.DataclassField]]
+        self,
+        named_required_fields: Sequence[tuple[str, bool, core_schema.TypedDictField | core_schema.DataclassField]],
+        computed_fields: Sequence[ComputedField]
     ) -> JsonSchemaValue:
         properties: dict[str, JsonSchemaValue] = {}
         required_fields: list[str] = []
@@ -569,6 +583,15 @@ class GenerateJsonSchema:
             properties[name] = field_json_schema
             if required:
                 required_fields.append(name)
+
+        for computed_field in computed_fields:
+            name = computed_field['property_name']
+            if self.by_alias:
+                name = computed_field.get('alias', name)
+            field_json_schema = self.generate_inner(field).copy()
+            for js_modify_function in metadata_handler.metadata.get('pydantic_js_functions', ()):
+            # field_json_schema =
+
 
         json_schema = {'type': 'object', 'properties': properties}
         if required_fields:
@@ -610,10 +633,15 @@ class GenerateJsonSchema:
         return json_schema
 
     def dataclass_args_schema(self, schema: core_schema.DataclassArgsSchema) -> JsonSchemaValue:
+        fields = schema['fields']
+        if self._mode == 'serialization':
+            computed_fields = schema.get('computed_fields', [])
+        else:
+            computed_fields = []
         named_required_fields = [
-            (field['name'], field['schema']['type'] != 'default', field) for field in schema['fields']
+            (field['name'], field['schema']['type'] != 'default', field) for field in fields
         ]
-        return self._named_required_fields_schema(named_required_fields)
+        return self._named_required_fields_schema(named_required_fields, computed_fields)
 
     def dataclass_schema(self, schema: core_schema.DataclassSchema) -> JsonSchemaValue:
         # TODO: Better-share this logic with model_schema
@@ -1137,6 +1165,7 @@ def model_json_schema(
     by_alias: bool = True,
     ref_template: str = DEFAULT_REF_TEMPLATE,
     schema_generator: type[GenerateJsonSchema] = GenerateJsonSchema,
+    mode: Literal['serialization', 'validation'] = 'serialization',
 ) -> dict[str, Any]:
     # TODO: Put this in the "methods" module once that is created
     cls_json_schema_cache = _JSON_SCHEMA_CACHE.get(cls)
@@ -1147,7 +1176,9 @@ def model_json_schema(
     if cached is not None:
         return cached
 
-    json_schema = schema_generator(by_alias=by_alias, ref_template=ref_template).generate(cls.__pydantic_core_schema__)
+    json_schema = schema_generator(by_alias=by_alias, ref_template=ref_template).generate(
+        cls.__pydantic_core_schema__, mode=mode
+    )
     cls_json_schema_cache[(by_alias, ref_template, schema_generator)] = json_schema
 
     return json_schema
