@@ -87,6 +87,7 @@ from pydantic import (
     constr,
 )
 from pydantic.decorators import field_validator
+from pydantic.json_schema import GetJsonSchemaHandler, JsonSchemaValue
 from pydantic.types import AllowInfNan, ImportString, SecretField, Strict
 
 try:
@@ -4402,6 +4403,13 @@ def test_third_party_type_integration():
                 serialization=core_schema.plain_serializer_function_ser_schema(lambda instance: instance.x),
             )
 
+        @classmethod
+        def __get_pydantic_json_schema__(
+            cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+        ) -> JsonSchemaValue:
+            # Use the same schema that would be used for `int`
+            return handler(core_schema.int_schema())
+
     # We now create an Annotated wrapper that we'll use as the annotation for fields on BaseModels etc.
     PydanticThirdPartyType = Annotated[ThirdPartyType, _ThirdPartyTypePydanticAnnotation]
 
@@ -4444,3 +4452,10 @@ def test_third_party_type_integration():
             'type': 'int_parsing',
         },
     ]
+
+    assert Model.model_json_schema() == {
+        'properties': {'third_party_type': {'title': 'Third Party Type', 'type': 'integer'}},
+        'required': ['third_party_type'],
+        'title': 'Model',
+        'type': 'object',
+    }
