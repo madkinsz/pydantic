@@ -15,11 +15,14 @@ from pydantic import (
     FieldSerializationInfo,
     SerializationInfo,
     SerializerFunctionWrapHandler,
+)
+from pydantic.config import ConfigDict
+from pydantic.serializers import (
+    PlainSerializer,
+    WrapSerializer,
     field_serializer,
     model_serializer,
 )
-from pydantic.annotated_arguments import PlainSerializer, WrapSerializer
-from pydantic.config import ConfigDict
 
 
 def test_serialize_extra_allow() -> None:

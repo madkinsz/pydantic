@@ -4,8 +4,8 @@ from typing import Any, Dict, cast
 
 import pytest
 
-from pydantic import BaseModel, ValidationInfo
-from pydantic.decorators import ModelWrapValidatorHandler, model_validator
+from pydantic import BaseModel, ValidationInfo, model_validator
+from pydantic.validators import ModelWrapValidatorHandler
 
 
 def test_model_validator_wrap() -> None:

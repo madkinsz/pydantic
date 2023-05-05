@@ -42,6 +42,7 @@ from pydantic import (
     PydanticUserError,
     ValidationError,
     ValidationInfo,
+    field_validator,
     root_validator,
 )
 from pydantic._internal._core_utils import collect_invalid_schemas
@@ -54,7 +55,6 @@ from pydantic._internal._generics import (
     recursively_defined_type_refs,
     replace_types,
 )
-from pydantic.decorators import field_validator
 
 
 @pytest.fixture()

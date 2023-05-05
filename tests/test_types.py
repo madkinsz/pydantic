@@ -85,8 +85,8 @@ from pydantic import (
     conlist,
     conset,
     constr,
+    field_validator,
 )
-from pydantic.decorators import field_validator
 from pydantic.types import AllowInfNan, ImportString, SecretField, Strict
 
 try:
